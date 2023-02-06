@@ -1,38 +1,40 @@
-import SourceConfig from './SourceConfig';
-import HandleConfig from './HandleConfig';
-import TargetConfig from './TargetConfig';
-
 class JobSchedule {
-  public code: string;
-
   public title: string;
 
   public rule: string;
 
-  public sourceConfig: SourceConfig;
-
-  public handleConfig: HandleConfig;
-
-  public targetConfig: TargetConfig;
-
   public remark: string;
 
+  // 数据源配置
+  public sourceType: number;
+
+  public filePath: string;
+
+  // 回调配置
+  public callbackType: number;
+
+  public ip: string;
+
+  public port: string;
+
   constructor(
-    code: string,
     title: string,
     rule: string,
-    sourceConfig: SourceConfig,
-    handleConfig: HandleConfig,
-    targetConfig: TargetConfig,
-    remark: string
+    remark: string,
+    sourceType: number,
+    filePath: string,
+    callbackType: number,
+    ip: string,
+    port: string
   ) {
-    this.code = code;
     this.title = title;
     this.rule = rule;
-    this.sourceConfig = sourceConfig;
-    this.handleConfig = handleConfig;
-    this.targetConfig = targetConfig;
     this.remark = remark;
+    this.sourceType = sourceType;
+    this.filePath = filePath;
+    this.callbackType = callbackType;
+    this.ip = ip;
+    this.port = port;
   }
 }
 

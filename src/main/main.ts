@@ -9,11 +9,14 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+import db from './datastore';
+
+db.defaults({ jobSchedules: [] }).write();
 
 class AppUpdater {
   constructor() {
@@ -29,6 +32,38 @@ ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
   console.log(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
+});
+
+ipcMain.on('open-directory-dialog', (event, arg) => {
+  dialog
+    .showOpenDialog({
+      filters: [{ name: '文件类型', extensions: ['csv'] }],
+      properties: ['openFile', 'multiSelections'],
+    })
+    .then((results) => {
+      event.sender.send('selected-path', results.filePaths);
+    })
+    .catch(console.log);
+});
+
+// db crud
+ipcMain.on('lowdb-insert', async (event, arg) => {
+  db.get('jobSchedules').push(arg[0]).write();
+});
+
+ipcMain.on('lowdb-delete', async (event, arg) => {
+  db.get('jobSchedules').remove({ title: arg[0] }).write();
+});
+
+ipcMain.on('lowdb-update', async (event, args) => {
+  const data = args[0];
+  console.log('lowdb-update', data);
+  db.get('jobSchedules').find({ title: data.title }).assign(data).write();
+});
+
+ipcMain.on('lowdb-query', async (event, arg) => {
+  const datas = db.get('jobSchedules').value();
+  event.sender.send('query-reply', datas);
 });
 
 if (process.env.NODE_ENV === 'production') {
@@ -78,6 +113,7 @@ const createWindow = async () => {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
         : path.join(__dirname, '../../.erb/dll/preload.js'),
+      nodeIntegration: true,
     },
   });
 

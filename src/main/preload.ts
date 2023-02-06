@@ -1,6 +1,15 @@
-import { contextBridge, ipcRenderer, IpcRendererEvent, dialog } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example';
+export type Channels =
+  | 'ipc-example'
+  | 'open-directory-dialog'
+  | 'selected-path'
+  | 'ipc-dialog'
+  | 'lowdb-insert'
+  | 'lowdb-delete'
+  | 'lowdb-update'
+  | 'lowdb-query'
+  | 'query-reply';
 
 // 主进程与渲染进程之间的通讯
 const electronHandler = {
