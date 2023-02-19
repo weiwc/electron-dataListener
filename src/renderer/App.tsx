@@ -1,36 +1,39 @@
-import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+/* eslint-disable no-undef */
+import { useContext, useEffect } from 'react';
 import { ConfigProvider } from 'antd';
+import React = require('react');
 import ScheduleList from './ScheduleList';
 import './App.css';
-import JobSchedule from './entity/JobSchedule';
+import ContextProvide, { Context } from './usereducer/context';
 
 const AppContext: React.FC = () => {
-  const [listData, setListData] = useState([]);
+  const { state, dispatch } = useContext(Context)!;
   // let listData: JobSchedule[] = [];
 
   window.electron.ipcRenderer.sendMessage('lowdb-query', []);
 
   useEffect(() => {
     window.electron.ipcRenderer.once('query-reply', async (datas: any) => {
-      console.log(datas);
-      setListData(datas);
+      __electronLog.info(`jobs query --->${datas}`);
+      dispatch({
+        type: 'update',
+        payload: datas,
+      });
     });
-  }, [listData]);
+  });
 
   return (
     <ConfigProvider>
-      <ScheduleList datas={listData} />
+      <ScheduleList datas={state.listData} />
     </ConfigProvider>
   );
 };
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<AppContext />} />
-      </Routes>
-    </Router>
+    <ContextProvide>
+      <AppContext />
+      <div />
+    </ContextProvide>
   );
 }

@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import {
   EditOutlined,
   EllipsisOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
-import { Card, List, Divider, Button } from 'antd';
+import { Card, List, Divider, Button, Popconfirm } from 'antd';
 import JobSchedule from './entity/JobSchedule';
 import ScheduleDrawer from './components/ScheduleDrawer';
+import './ScheduleList.css';
+import { Context } from './usereducer/context';
 
 const { Meta } = Card;
 
@@ -16,6 +18,7 @@ type ListProps = {
 
 const ScheduleList: React.FC<ListProps> = ({ datas }) => {
   const configRef = React.createRef<any>();
+  const { state, dispatch } = useContext(Context)!;
 
   const openDrawer = () => {
     configRef.current.showDrawer();
@@ -26,21 +29,31 @@ const ScheduleList: React.FC<ListProps> = ({ datas }) => {
   };
 
   const deleteRule = (data: any) => {
-    window.electron.ipcRenderer.sendMessage('lowdb-delete', [data.title]);
+    const updateData: any[] = state.listData;
+    const newData: any[] = [];
+    window.electron.ipcRenderer.sendMessage('lowdb-delete', [data.jobId]);
+    for (let i = 0; i < updateData.length; i += 1) {
+      const delData: JobSchedule = updateData[i];
+      if (delData.jobId !== data.jobId) {
+        newData.push(delData);
+      }
+    }
+    dispatch({
+      type: 'delete',
+      payload: updateData,
+    });
   };
 
   return (
     <div>
       <Divider orientation="left">任务列表</Divider>
       <List
+        className="list-sty"
         itemLayout="vertical"
         size="large"
         bordered
-        style={{ width: '500px' }}
         pagination={{
-          onChange: (page) => {
-            console.log(page);
-          },
+          onChange: () => {},
           pageSize: 6,
         }}
         dataSource={datas}
@@ -65,16 +78,24 @@ const ScheduleList: React.FC<ListProps> = ({ datas }) => {
             <Card
               hoverable
               actions={[
+                <Popconfirm
+                  title="删除提示"
+                  description="确认要删除此数据？"
+                  onConfirm={() => deleteRule(item)}
+                  okText="删除"
+                  okType="danger"
+                  cancelText="取消"
+                >
+                  <Button
+                    type="default"
+                    shape="circle"
+                    icon={<DeleteOutlined key="delete" />}
+                  />
+                </Popconfirm>,
                 <Button
                   type="default"
                   shape="circle"
-                  onClick={(e) => deleteRule(item)}
-                  icon={<DeleteOutlined key="delete" />}
-                />,
-                <Button
-                  type="default"
-                  shape="circle"
-                  onClick={(e) => editRule(item)}
+                  onClick={() => editRule(item)}
                   icon={<EditOutlined key="edit" />}
                 />,
                 <Button

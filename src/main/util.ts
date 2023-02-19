@@ -1,4 +1,3 @@
-/* eslint import/prefer-default-export: off */
 import { URL } from 'url';
 import path from 'path';
 
@@ -10,4 +9,8 @@ export function resolveHtmlPath(htmlFileName: string) {
     return url.href;
   }
   return `file://${path.resolve(__dirname, '../renderer/', htmlFileName)}`;
+}
+
+export function getNextDate(date: Date, day: number) {
+  return new Date(date.getTime() + day * 24 * 3600 * 1000);
 }

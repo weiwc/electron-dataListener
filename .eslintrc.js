@@ -3,9 +3,26 @@ module.exports = {
   rules: {
     // A temporary hack related to IDE not resolving correct package.json
     'import/no-extraneous-dependencies': 'off',
-    'import/no-unresolved': 'error',
-    // Since React 17 and typescript 4.1 you can safely disable the rule
     'react/react-in-jsx-scope': 'off',
+    'react/jsx-filename-extension': 'off',
+    'import/extensions': 'off',
+    'import/no-unresolved': 'off',
+    'import/no-import-module-exports': 'off',
+    'react/function-component-definition': [
+      2,
+      {
+        namedComponents: [
+          'function-declaration',
+          'function-expression',
+          'arrow-function',
+        ],
+        unnamedComponents: ['function-expression', 'arrow-function'],
+      },
+    ],
+    'no-unused-vars': [
+      'error',
+      { vars: 'all', args: 'none', ignoreRestSiblings: false },
+    ],
   },
   parserOptions: {
     ecmaVersion: 2020,

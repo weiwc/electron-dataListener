@@ -47,16 +47,6 @@ const configuration: webpack.Configuration = {
     modules: [webpackPaths.srcPath, 'node_modules'],
     // There is no need to add aliases here, the paths in tsconfig get mirrored
     plugins: [new TsconfigPathsPlugins()],
-    // fallback: {
-    //   crypto: require.resolve('crypto-browserify'),
-    //   path: require.resolve('path-browserify'),
-    //   url: require.resolve('url'),
-    //   buffer: require.resolve('buffer/'),
-    //   util: require.resolve('util/'),
-    //   stream: require.resolve('stream-browserify/'),
-    //   vm: require.resolve('vm-browserify'),
-    //   constants: require.resolve('constants-browserify'),
-    // },
   },
 
   plugins: [

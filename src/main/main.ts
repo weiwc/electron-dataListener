@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-expressions */
 /* eslint global-require: off, no-console: off, promise/always-return: off */
 
 /**
@@ -9,12 +10,21 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
+import electron, { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import log from 'electron-log';
+import JobSchedule from 'renderer/entity/JobSchedule';
+import { ToadScheduler } from 'toad-scheduler';
+import { v4 as uuidv4 } from 'uuid';
+import { Socket } from 'node:net';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import db from './datastore';
+import log from './log';
+import addJobTask from './jobTask';
+
+const { globalShortcut } = electron;
+
+const scheduler = new ToadScheduler();
 
 db.defaults({ jobSchedules: [] }).write();
 
@@ -28,13 +38,9 @@ class AppUpdater {
 
 let mainWindow: BrowserWindow | null = null;
 
-ipcMain.on('ipc-example', async (event, arg) => {
-  const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
-  event.reply('ipc-example', msgTemplate('pong'));
-});
+const jobSocketClientMap: Map<string, any> = new Map();
 
-ipcMain.on('open-directory-dialog', (event, arg) => {
+ipcMain.on('open-directory-dialog', (event) => {
   dialog
     .showOpenDialog({
       filters: [{ name: '文件类型', extensions: ['csv'] }],
@@ -43,25 +49,51 @@ ipcMain.on('open-directory-dialog', (event, arg) => {
     .then((results) => {
       event.sender.send('selected-path', results.filePaths);
     })
-    .catch(console.log);
+    .catch((err) => log.error(err));
 });
 
 // db crud
 ipcMain.on('lowdb-insert', async (event, arg) => {
-  db.get('jobSchedules').push(arg[0]).write();
+  const data: JobSchedule = arg[0];
+  data.jobId = uuidv4();
+  data.isInSchedule = true;
+  data.isSocketConnected = false;
+  db.get('jobSchedules').push(data).write();
+  // 添加定时任务
+  addJobTask(data, scheduler, jobSocketClientMap);
 });
 
 ipcMain.on('lowdb-delete', async (event, arg) => {
-  db.get('jobSchedules').remove({ title: arg[0] }).write();
+  const id = arg[0];
+  db.get('jobSchedules').remove({ jobId: arg[0] }).write();
+  if (scheduler.existsById(id)) {
+    scheduler.removeById(id);
+  }
 });
 
 ipcMain.on('lowdb-update', async (event, args) => {
   const data = args[0];
-  console.log('lowdb-update', data);
-  db.get('jobSchedules').find({ title: data.title }).assign(data).write();
+  data.isInSchedule = true;
+  log.info('lowdb-update', data);
+  db.get('jobSchedules').find({ jobId: data.jobId }).assign(data).write();
+  // 修改定时任务
+  log.info(scheduler.existsById(data.jobId));
+  if (scheduler.existsById(data.jobId)) {
+    // 移除定时任务
+    if (jobSocketClientMap.has(data.jobId)) {
+      const socketClient: Socket = jobSocketClientMap.get(data.jobId);
+      if (socketClient) {
+        socketClient.destroy();
+      }
+      jobSocketClientMap.delete(data.jobId);
+    }
+    log.info('lowdb-update remove scheduler');
+    scheduler.removeById(data.jobId);
+  }
+  addJobTask(data, scheduler, jobSocketClientMap);
 });
 
-ipcMain.on('lowdb-query', async (event, arg) => {
+ipcMain.on('lowdb-query', async (event) => {
   const datas = db.get('jobSchedules').value();
   event.sender.send('query-reply', datas);
 });
@@ -114,7 +146,11 @@ const createWindow = async () => {
         ? path.join(__dirname, 'preload.js')
         : path.join(__dirname, '../../.erb/dll/preload.js'),
       nodeIntegration: true,
+      // devTools: false
     },
+    autoHideMenuBar: true,
+    // frame: false,
+    resizable: false,
   });
 
   mainWindow.loadURL(resolveHtmlPath('index.html'));
@@ -148,6 +184,23 @@ const createWindow = async () => {
   new AppUpdater();
 };
 
+const initSchedule = async () => {
+  log.info('initSchedule ---- start!');
+  const datas: JobSchedule[] = db.get('jobSchedules').value();
+  log.info(`initSchedule ---> ${JSON.stringify(datas)}`);
+  if (datas.length !== 0) {
+    for (let index = 0; index < datas.length; index += 1) {
+      const data = datas[index];
+      if (scheduler.existsById(data.jobId)) {
+        scheduler.removeById(data.jobId);
+      }
+      addJobTask(data, scheduler, jobSocketClientMap);
+    }
+  }
+  // 添加测试job
+  log.info('initSchedule ---- end!');
+};
+
 /**
  * Add event listeners...
  */
@@ -168,6 +221,12 @@ app
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.
       if (mainWindow === null) createWindow();
+    });
+    // init schedule
+    initSchedule();
+    globalShortcut.register('CommandOrControl+Shift+L', () => {
+      const focusWin = BrowserWindow.getFocusedWindow();
+      focusWin && focusWin.webContents.toggleDevTools();
     });
   })
   .catch(console.log);

@@ -1,4 +1,6 @@
-import { Drawer, Space, Button, message, Form, Input } from 'antd';
+/* eslint-disable no-undef */
+/* eslint-disable react/jsx-no-useless-fragment */
+import { Drawer, Space, Button, message, Input } from 'antd';
 import {
   ProFormInstance,
   ProFormDatePicker,
@@ -9,7 +11,6 @@ import {
 } from '@ant-design/pro-components';
 import { useState, forwardRef, useImperativeHandle, Ref, useRef } from 'react';
 import { FileOutlined } from '@ant-design/icons';
-import fs from 'fs';
 import JobSchedule from 'renderer/entity/JobSchedule';
 
 const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
@@ -17,16 +18,26 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
 
   const [isEdit, setIsEdit] = useState(false);
 
+  const [formData, setFormData] = useState({} as JobSchedule);
+
+  const [callbackVal, setCallbackVal] = useState('1');
+
   const formMapRef = useRef<
     React.MutableRefObject<ProFormInstance<any> | undefined>[]
   >([]);
 
   const showDrawer = (data: any) => {
-    console.log(data);
-    if (data) {
+    __electronLog.info(`showDrawer data --->${data}`);
+    if (data && JSON.stringify(data) !== '{}') {
       setIsEdit(true);
+      setFormData(data);
       formMapRef?.current?.forEach((formInstanceRef) => {
         formInstanceRef?.current?.setFieldsValue(data);
+      });
+    } else {
+      setIsEdit(false);
+      formMapRef?.current?.forEach((formInstanceRef) => {
+        formInstanceRef?.current?.resetFields();
       });
     }
     setOpen(true);
@@ -61,30 +72,33 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
   };
 
   const handleOk = async (values: any) => {
-    console.log(values);
+    __electronLog.info(`showDrawer handleOk --->${values}`);
     message.success('Processing complete!');
-    const jobSchedule = new JobSchedule(
-      values.title,
-      values.rule,
-      values.remark,
-      values.sourceType,
-      values.filePath,
-      values.callbackType,
-      values.ip,
-      values.port
-    );
-    console.log(jobSchedule);
-    // console.log(os.homedir());
+    const jobSchedule: JobSchedule = formData;
+    jobSchedule.title = values.title;
+    jobSchedule.rule = values.rule;
+    jobSchedule.remark = values.remark;
+    jobSchedule.sourceType = values.sourceType;
+    jobSchedule.filePath = values.filePath;
+    jobSchedule.callbackType = values.callbackType;
+    jobSchedule.ip = values.ip;
+    jobSchedule.port = values.port;
     // 通过lowdb 将 form数据入库
     if (isEdit) {
-      console.log('update');
+      __electronLog.info('showDrawer action --->update');
       window.electron.ipcRenderer.sendMessage('lowdb-update', [jobSchedule]);
     } else {
-      console.log('insert');
+      __electronLog.info('showDrawer action --->insert');
       window.electron.ipcRenderer.sendMessage('lowdb-insert', [jobSchedule]);
     }
     onClose();
     return true;
+  };
+
+  const callbacktypeFn = (val: any) => {
+    console.log(val, 'val----');
+    setCallbackVal(val);
+    return val;
   };
 
   return (
@@ -185,24 +199,48 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
                 value: '1',
                 label: 'socket',
               },
+              {
+                value: '2',
+                label: 'restfulPath',
+              },
             ]}
+            fieldProps={{
+              onChange: (value) => {
+                callbacktypeFn(value);
+              },
+            }}
           />
-          <ProFormText
-            name="ip"
-            label="回调ip"
-            width="md"
-            tooltip="socket服务端ip地址"
-            placeholder="请输入ip"
-            rules={[{ required: true }]}
-          />
-          <ProFormText
-            name="port"
-            label="端口"
-            width="md"
-            tooltip="socket服务端端口"
-            placeholder="请输入port"
-            rules={[{ required: true }]}
-          />
+          {callbackVal === '1' ? (
+            <>
+              <ProFormText
+                name="ip"
+                label="回调ip"
+                width="md"
+                tooltip="socket服务端ip地址"
+                placeholder="请输入ip"
+                rules={[{ required: true }]}
+              />
+              <ProFormText
+                name="port"
+                label="端口"
+                width="md"
+                tooltip="socket服务端端口"
+                placeholder="请输入port"
+                rules={[{ required: true }]}
+              />
+            </>
+          ) : (
+            <>
+              <ProFormText
+                name="restfulPath"
+                label="回调"
+                width="md"
+                tooltip=""
+                placeholder="请输入网址"
+                rules={[{ required: true }]}
+              />
+            </>
+          )}
         </StepsForm.StepForm>
       </StepsForm>
     </Drawer>

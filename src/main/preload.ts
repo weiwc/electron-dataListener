@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
 export type Channels =
-  | 'ipc-example'
   | 'open-directory-dialog'
   | 'selected-path'
   | 'ipc-dialog'
