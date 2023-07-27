@@ -1,6 +1,6 @@
 {
   "name": "yonyou-ext-dataListener",
-  "version": "0.0.1",
+  "version": "0.0.5",
   "description": "A foundation for scalable desktop apps",
   "license": "MIT",
   "author": {
@@ -15,6 +15,7 @@
     "link-modules": "node -r ts-node/register ../../.erb/scripts/link-modules.ts"
   },
   "dependencies": {
-    "electron-log": "^5.0.0-beta.15"
+    "electron-log": "^5.0.0-beta.15",
+    "luxon": "^3.2.1"
   }
 }

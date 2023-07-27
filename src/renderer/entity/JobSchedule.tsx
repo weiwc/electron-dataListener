@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon';
+
 class JobSchedule {
   public title: string;
 
@@ -27,15 +29,17 @@ class JobSchedule {
   private _isSocketConnected: boolean | undefined;
 
   // 列表展示的更新时间
-  public sortDate: Date;
+  public sortDate: string;
 
   // csv等文件的更新时间
-  public fileUpdateDate: Date;
+  public fileUpdateDate: string;
 
   // csv中读取的最新时间
-  public fileReadNewestTime: Date;
+  public fileReadNewestTime: string;
 
   public orgName: string;
+
+  public fileUpdateSize: number;
 
   constructor(
     title: string,
@@ -46,11 +50,12 @@ class JobSchedule {
     callbackType: number,
     ip: string,
     port: string,
-    sortDate: Date,
-    fileUpdateDate: Date,
-    fileReadNewestTime: Date,
+    sortDate: string,
+    fileUpdateDate: string,
+    fileReadNewestTime: string,
     orgName: string,
-    restfulPath: string
+    restfulPath: string,
+    fileUpdateSize: number
   ) {
     this.title = title;
     this.rule = rule;
@@ -65,6 +70,7 @@ class JobSchedule {
     this.fileReadNewestTime = fileReadNewestTime;
     this.orgName = orgName;
     this.restfulPath = restfulPath;
+    this.fileUpdateSize = fileUpdateSize;
   }
 
   get jobId(): string {

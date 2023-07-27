@@ -1,16 +1,16 @@
 import { Socket } from 'net';
 import JobSchedule from 'renderer/entity/JobSchedule';
 import { SimpleIntervalJob, Task, ToadScheduler } from 'toad-scheduler';
+import { DateTime } from 'luxon';
 import fs, { Stats } from 'fs';
 import log from './log';
 import createSocketClient from './socket';
 import db from './datastore';
-import { getNextDate } from './util';
 
 const axios = require('axios').default;
 
 const handleCsvSource = (data: JobSchedule) => {
-  const { fileUpdateDate, fileReadNewestTime, orgName } = data;
+  const { fileUpdateDate, fileUpdateSize, fileReadNewestTime, orgName } = data;
   if (!fs.existsSync(data.filePath)) {
     log.error(`${data.filePath}文件不存在！`);
     return [];
@@ -18,24 +18,30 @@ const handleCsvSource = (data: JobSchedule) => {
   log.info(`fileUpdateDate :${fileUpdateDate}`);
   const res: Stats = fs.statSync(data.filePath);
   // 修改时间
-  const { mtime } = res;
+  const { mtime, size } = res;
   log.info(`mtime :${mtime}`);
+  log.info(`size :${size}`);
+  const mDateTime = DateTime.fromMillis(mtime.getTime());
+  const fileUpdateDateTime = DateTime.fromISO(fileUpdateDate);
   if (
-    fileUpdateDate &&
-    new Date(fileUpdateDate).getTime() === new Date(mtime).getTime()
+    fileUpdateDateTime &&
+    fileUpdateDateTime === mDateTime &&
+    fileUpdateSize &&
+    fileUpdateSize === size
   ) {
     // 如果 更新时间大于记录文件更新时间
     log.info(
-      `${data.filePath}文件无改动，记录更新时间为${fileUpdateDate},文件更新时间为${mtime}！`
+      `${data.filePath}文件无改动，记录更新时间为${fileUpdateDate},文件更新时间为${mDateTime}，文件大小为${fileUpdateSize}！`
     );
     return [];
   }
-  data.fileUpdateDate = mtime;
+  data.fileUpdateDate = mDateTime.toISO();
+  data.fileUpdateSize = size;
   const fileContext = fs.readFileSync(data.filePath, 'utf-8');
   const fileDatas = fileContext.split('\r\n').reverse();
   // 如果最新的数据时间为空，则取往前推三天的数据
   if (!fileReadNewestTime) {
-    data.fileReadNewestTime = getNextDate(new Date(), -3);
+    data.fileReadNewestTime = DateTime.now().minus({ days: 3 }).toISO();
   }
   log.info(`fileReadNewestTime is ${data.fileReadNewestTime}`);
   let tempNewTime;
@@ -48,27 +54,36 @@ const handleCsvSource = (data: JobSchedule) => {
       // 处理数据
       log.info(line);
       const array = line.split(',');
-      const [time, code, , carbon, oxygen] = array;
+      const [time, code, , oxygen, carbon] = array;
       const lineTime = `${time.substring(6, 10)}-${time.substring(
         3,
         5
       )}-${time.substring(0, 2)} ${time.substring(10, 22)}`;
       // 记录最新一条数据
       log.info(`lineTime is ${lineTime}`);
+      const lineDateTime = DateTime.fromFormat(
+        lineTime,
+        'yyyy-MM-dd HH:mm:ss.SSS',
+        { zone: 'GMT+0' }
+      );
+      // 记录最新一条数据
+      log.info(`lineDateTime is ${lineDateTime}`);
       if (tempNewTime) {
         tempNewTime =
-          tempNewTime.getTime() < new Date(lineTime).getDate()
-            ? new Date(lineTime)
+          tempNewTime.toMillis() < lineDateTime.toMillis()
+            ? lineDateTime
             : tempNewTime;
       } else {
-        tempNewTime = new Date(lineTime);
+        tempNewTime = lineDateTime;
       }
       // 如果读取记录数据的时间 大于等于 当前数据的时间，跳出循环
-      log.info(`fileReadNewestTime -> ${data.fileReadNewestTime}`);
-      if (
-        new Date(lineTime).getTime() <=
-        new Date(data.fileReadNewestTime).getTime()
-      ) {
+      const dataFileReadNewestTime = DateTime.fromISO(data.fileReadNewestTime);
+      log.info(`fileReadNewestTime -> ${dataFileReadNewestTime}`);
+      log.info(`lineDateTime.toMillis is ${lineDateTime.toMillis()}`);
+      log.info(
+        `dataFileReadNewestTime.toMillis is ${dataFileReadNewestTime.toMillis()}`
+      );
+      if (lineDateTime.toMillis() <= dataFileReadNewestTime.toMillis()) {
         log.info('如果读取记录数据的时间 大于等于 当前数据的时间，跳出循环');
         if (tempList.length > 0) {
           socketList.push(tempList.join(';'));
@@ -86,11 +101,8 @@ const handleCsvSource = (data: JobSchedule) => {
       }
     }
   }
-  log.info(data);
   if (tempNewTime) {
-    data.fileReadNewestTime = new Date(
-      tempNewTime.getTime() - tempNewTime.getTimezoneOffset() * 60000
-    );
+    data.fileReadNewestTime = tempNewTime.toISO();
   }
   log.info(JSON.stringify(socketList));
   return socketList;
@@ -115,7 +127,6 @@ const socketHandle = (data: JobSchedule, jobSocketClientMap: any) => {
       socketClient.write(socketData);
     });
     log.info(data);
-    db.get('jobSchedules').find({ jobId: data.jobId }).assign(data).write();
   }
   return null;
 };
@@ -128,13 +139,15 @@ const restfulHandle = (data: JobSchedule) => {
     log.info(restfulPath);
     log.info(csvData);
     axios
-      .post(restfulPath, csvData)
+      .post(restfulPath, csvData, {
+        headers: { 'Content-Type': 'application/json;charset=utf8;' },
+      })
       .then((response: any) => {
-        log.info(response);
+        log.info(response.data);
         return response;
       })
       .catch((error: any) => {
-        log.info(error);
+        log.info(error.data);
       });
   });
   log.info('end -------------------> restfulHandle');
@@ -150,7 +163,7 @@ const addJobTask = (
     data.title,
     async () => {
       // 使用data
-      log.info(`AsyncTask exec --->${JSON.stringify(data)}`);
+      log.info(`AsyncTask start exec --->${JSON.stringify(data)}`);
       let { callbackType } = data;
       callbackType = Number(callbackType);
       switch (callbackType) {
@@ -163,6 +176,8 @@ const addJobTask = (
         default:
           break;
       }
+      db.get('jobSchedules').find({ jobId: data.jobId }).assign(data).write();
+      log.info(`AsyncTask end exec --->${JSON.stringify(data)}`);
       return new Promise(() => {});
     },
     (err: Error) => {
