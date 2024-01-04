@@ -10,17 +10,28 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import electron, { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
+import { Socket } from 'node:net';
+import electron, {
+  app,
+  BrowserWindow,
+  shell,
+  ipcMain,
+  dialog,
+  Tray,
+  Menu,
+  nativeImage,
+} from 'electron';
 import { autoUpdater } from 'electron-updater';
-import JobSchedule from 'renderer/entity/JobSchedule';
 import { ToadScheduler } from 'toad-scheduler';
 import { v4 as uuidv4 } from 'uuid';
-import { Socket } from 'node:net';
+import JobSchedule from 'renderer/entity/JobSchedule';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import db from './datastore';
 import log from './log';
 import addJobTask from './jobTask';
+
+// const isDevelopment = process.env.NODE_ENV !== 'production';
 
 const { globalShortcut } = electron;
 
@@ -38,6 +49,53 @@ class AppUpdater {
 
 let mainWindow: BrowserWindow | null = null;
 
+if (process.platform === 'darwin') {
+  const exeName = path.basename(process.execPath);
+  app.setLoginItemSettings({
+    openAtLogin: true, // 自启动
+    openAsHidden: false,
+    path: process.execPath,
+    args: ['--processStart', `"${exeName}"`],
+  });
+}
+
+// 开机自启动，非开发模式，mwp，2023.08.01
+// if (!isDevelopment) {
+// if (process.platform === 'darwin') {
+//   const exeName = path.basename(process.execPath);
+//   app.setLoginItemSettings({
+//     openAtLogin: true,
+//     path: process.execPath,
+//     args: [
+//       '--processStart',
+//       `"${exeName}"`,
+//       '--process-start-args',
+//       '"--hidden"',
+//     ],
+//   });
+// }
+// }
+// if (app.isPackaged) {
+//   console.log('====================');
+//   // const exeName = path.basename(process.execPath);
+//   app.setLoginItemSettings({
+//     openAtLogin: true,
+//     openAsHidden: false,
+//     path: process.execPath,
+//     args: [path.resolve(process.argv[1])],
+//     // args: [
+//     //   '--processStart',
+//     //   `"${exeName}"`,
+//     //   // '--process-start-args',
+//     //   // '"--hidden"',
+//     // ],
+//   });
+// } else {
+//   console.log('--------------------');
+//   app.setLoginItemSettings({
+//     openAtLogin: true,
+//   });
+// }
 const jobSocketClientMap: Map<string, any> = new Map();
 
 ipcMain.on('open-directory-dialog', (event) => {
@@ -123,18 +181,59 @@ const installExtensions = async () => {
     .catch(console.log);
 };
 
+const RESOURCES_PATH = app.isPackaged
+  ? path.join(process.resourcesPath, 'assets')
+  : path.join(__dirname, '../../assets');
+
+const getAssetPath = (...paths: string[]): string => {
+  return path.join(RESOURCES_PATH, ...paths);
+};
+
+// 托盘功能，mwp，2023.07.31
+// eslint-disable-next-line no-unused-vars
+let tray = null;
+const trayFun = (win: any) => {
+  // const icon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
+  // let icon = null;
+  // if (isDevelopment) {
+  //   // 开发环境
+  //   // icon = nativeImage.createFromPath(path.join(app.getAppPath(), '/icon.png'));
+  //   icon = nativeImage.createFromPath(
+  //     path.join(__dirname, '../../assets/icon.png')
+  //   );
+  // } else {
+  //   // 正式环境
+  //   icon = nativeImage.createFromPath(
+  //     path.join(path.dirname(app.getPath('exe')), '/icon.png')
+  //   );
+  // }
+  const icon = nativeImage.createFromPath(getAssetPath('icon.png'));
+  tray = new Tray(icon);
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '退出应用',
+      type: 'normal',
+      click: () => {
+        console.log('退出应用');
+        if (process.platform !== 'darwin') {
+          // app.quit();
+          app.exit();
+        }
+      },
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
+  tray.setToolTip('实验室氧碳软件');
+  tray.on('click', () => {
+    console.log('图标点击了');
+    win.show();
+  });
+};
+
 const createWindow = async () => {
   if (isDebug) {
     await installExtensions();
   }
-
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets');
-
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
 
   mainWindow = new BrowserWindow({
     show: false,
@@ -165,10 +264,15 @@ const createWindow = async () => {
       mainWindow.show();
     }
   });
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  // 最小化到托盘，mwp，2023.07.31
+  mainWindow.on('close', (event) => {
+    event.preventDefault();
+    mainWindow?.hide();
   });
+
+  // mainWindow.on('closed', () => {
+  //   // mainWindow = null;
+  // });
 
   const menuBuilder = new MenuBuilder(mainWindow);
   menuBuilder.buildMenu();
@@ -182,6 +286,8 @@ const createWindow = async () => {
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
   new AppUpdater();
+  // 调用托盘功能方法，mwp，2023.07.31
+  trayFun(mainWindow);
 };
 
 const initSchedule = async () => {
@@ -205,12 +311,13 @@ const initSchedule = async () => {
  * Add event listeners...
  */
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', (event: any) => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // if (process.platform !== 'darwin') {
+  //   app.quit();
+  // }
+  // event.preventDefault();
 });
 
 app

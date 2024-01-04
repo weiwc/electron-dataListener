@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Webpack config for production electron main process
  */
 

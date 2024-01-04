@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Build config for electron renderer process
  */
 

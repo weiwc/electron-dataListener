@@ -41,7 +41,7 @@ const handleCsvSource = (data: JobSchedule) => {
   const fileDatas = fileContext.split('\r\n').reverse();
   // 如果最新的数据时间为空，则取往前推三天的数据
   if (!fileReadNewestTime) {
-    data.fileReadNewestTime = DateTime.now().minus({ days: 3 }).toISO();
+    data.fileReadNewestTime = DateTime.now().minus({ days: 30 }).toISO();
   }
   log.info(`fileReadNewestTime is ${data.fileReadNewestTime}`);
   let tempNewTime;
@@ -138,8 +138,9 @@ const restfulHandle = (data: JobSchedule) => {
   csvList.forEach((csvData) => {
     log.info(restfulPath);
     log.info(csvData);
+    const params = { data: { infos: csvData } };
     axios
-      .post(restfulPath, csvData, {
+      .post(restfulPath, JSON.stringify(params), {
         headers: { 'Content-Type': 'application/json;charset=utf8;' },
       })
       .then((response: any) => {
