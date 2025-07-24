@@ -24,12 +24,16 @@ import electron, {
 import { autoUpdater } from 'electron-updater';
 import { ToadScheduler } from 'toad-scheduler';
 import { v4 as uuidv4 } from 'uuid';
-import JobSchedule from 'renderer/entity/JobSchedule';
+import JobSchedule from '../renderer/entity/JobSchedule';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import db from './datastore';
 import log from './log';
 import addJobTask from './jobTask';
+
+const AutoLaunch = require('auto-launch');
+
+const axios = require('axios').default;
 
 // const isDevelopment = process.env.NODE_ENV !== 'production';
 
@@ -37,7 +41,19 @@ const { globalShortcut } = electron;
 
 const scheduler = new ToadScheduler();
 
-db.defaults({ jobSchedules: [] }).write();
+const myAppLauncher = new AutoLaunch({
+  name: 'yonyou-ext-dataListener',
+});
+
+// 启用开机自启动
+myAppLauncher.enable();
+
+db.defaults({
+  updateConfigPath: '',
+  ip: '',
+  queryConfigPath: '',
+  jobSchedules: [],
+}).write();
 
 class AppUpdater {
   constructor() {
@@ -152,8 +168,53 @@ ipcMain.on('lowdb-update', async (event, args) => {
 });
 
 ipcMain.on('lowdb-query', async (event) => {
-  const datas = db.get('jobSchedules').value();
-  event.sender.send('query-reply', datas);
+  log.info('lowdb-query ---- start!');
+  const ip: string = db.get('ip').value();
+  const queryConfigPath: string = db.get('queryConfigPath').value();
+  if (ip) {
+    axios
+      .post(
+        queryConfigPath.trim(),
+        { ip },
+        {
+          headers: { 'Content-Type': 'application/json;charset=utf8;' },
+        }
+      )
+      .then((response: any) => {
+        const jobDatas: JobSchedule[] = [];
+        if (response.data.data.length !== 0) {
+          for (let index = 0; index < response.data.data.length; index += 1) {
+            const element = response.data.data[index];
+            const jobItem2 = new JobSchedule(
+              element.id,
+              '氧碳定时任务',
+              '',
+              '',
+              Number(element.sourcetype),
+              element.filepath,
+              2,
+              element.ip,
+              '',
+              '',
+              element.fileupdatedate,
+              element.filereadnewesttime,
+              element.org_name,
+              element.restfulpath,
+              element.fileupdatesize,
+              element.executefrequency
+            );
+            jobDatas.push(jobItem2);
+          }
+          log.info('list show !!!!');
+          event.sender.send('query-reply', jobDatas);
+        }
+      })
+      .catch((error: any) => {
+        log.info(error.data);
+      });
+  } else {
+    log.info('未配置当前电脑的ip地址！');
+  }
 });
 
 if (process.env.NODE_ENV === 'production') {
@@ -292,16 +353,63 @@ const createWindow = async () => {
 
 const initSchedule = async () => {
   log.info('initSchedule ---- start!');
-  const datas: JobSchedule[] = db.get('jobSchedules').value();
-  log.info(`initSchedule ---> ${JSON.stringify(datas)}`);
-  if (datas.length !== 0) {
-    for (let index = 0; index < datas.length; index += 1) {
-      const data = datas[index];
-      if (scheduler.existsById(data.jobId)) {
-        scheduler.removeById(data.jobId);
-      }
-      addJobTask(data, scheduler, jobSocketClientMap);
-    }
+  const ip: string = db.get('ip').value();
+  const queryConfigPath: string = db.get('queryConfigPath').value();
+  log.info(`info_ip ---> ${ip}`);
+  if (ip) {
+    log.info(`queryConfigPath ---> ${queryConfigPath}`);
+    axios
+      .post(
+        queryConfigPath.trim(),
+        { ip },
+        {
+          headers: { 'Content-Type': 'application/json;charset=utf8;' },
+        }
+      )
+      .then((response: any) => {
+        // eslint-disable-next-line prefer-template
+        log.info(response.data.data);
+        // eslint-disable-next-line prefer-template
+        log.info('length : ' + response.data.data.length);
+        if (response.data.data.length !== 0) {
+          // eslint-disable-next-line no-plusplus
+          for (let index = 0; index < response.data.data.length; index++) {
+            try {
+              const element = response.data.data[index];
+              const jobItem = new JobSchedule(
+                element.id,
+                '氧碳定时任务',
+                '',
+                '',
+                Number(element.sourcetype),
+                element.filepath,
+                2,
+                element.ip,
+                '',
+                '',
+                element.fileupdatedate,
+                element.filereadnewesttime,
+                element.org_name,
+                element.restfulpath,
+                element.fileupdatesize,
+                element.executefrequency
+              );
+              if (scheduler.existsById(jobItem.jobId)) {
+                scheduler.removeById(jobItem.jobId);
+              }
+              log.info(jobItem);
+              addJobTask(jobItem, scheduler, jobSocketClientMap);
+            } catch (error) {
+              log.info(error);
+            }
+          }
+        }
+      })
+      .catch((error: any) => {
+        log.info(error);
+      });
+  } else {
+    log.info(`ip is null!`);
   }
   // 添加测试job
   log.info('initSchedule ---- end!');
@@ -320,20 +428,39 @@ app.on('window-all-closed', (event: any) => {
   // event.preventDefault();
 });
 
-app
-  .whenReady()
-  .then(() => {
-    createWindow();
-    app.on('activate', () => {
-      // On macOS it's common to re-create a window in the app when the
-      // dock icon is clicked and there are no other windows open.
-      if (mainWindow === null) createWindow();
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+  app
+    .whenReady()
+    .then(() => {
+      createWindow();
+      app.on('activate', () => {
+        // On macOS it's common to re-create a window in the app when the
+        // dock icon is clicked and there are no other windows open.
+        if (mainWindow === null) createWindow();
+      });
+      // init schedule
+      try {
+        initSchedule();
+      } catch (error) {
+        log.error(error);
+      }
+      globalShortcut.register('CommandOrControl+Shift+L', () => {
+        const focusWin = BrowserWindow.getFocusedWindow();
+        focusWin && focusWin.webContents.toggleDevTools();
+      });
+      window.electron.ipcRenderer.sendMessage('lowdb-query', []);
+    })
+    .catch((error) => {
+      log.error(error);
     });
-    // init schedule
-    initSchedule();
-    globalShortcut.register('CommandOrControl+Shift+L', () => {
-      const focusWin = BrowserWindow.getFocusedWindow();
-      focusWin && focusWin.webContents.toggleDevTools();
-    });
-  })
-  .catch(console.log);
+}

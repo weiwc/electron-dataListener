@@ -1,7 +1,7 @@
 {
   "name": "yonyou-ext-dataListener",
-  "version": "0.0.6",
-  "description": "for 东方日升",
+  "version": "0.3.1",
+  "description": "用友数据收集",
   "license": "MIT",
   "author": {
     "name": "weichen",

@@ -1,8 +1,8 @@
 import React, { useContext } from 'react';
 import {
   EditOutlined,
-  EllipsisOutlined,
   DeleteOutlined,
+  FolderViewOutlined,
 } from '@ant-design/icons';
 import { Card, List, Divider, Button, Popconfirm } from 'antd';
 import JobSchedule from './entity/JobSchedule';
@@ -20,12 +20,16 @@ const ScheduleList: React.FC<ListProps> = ({ datas }) => {
   const configRef = React.createRef<any>();
   const { state, dispatch } = useContext(Context)!;
 
-  const openDrawer = () => {
-    configRef.current.showDrawer();
+  const openDrawer = (data: any, typestr: string) => {
+    configRef.current.showDrawer(data, typestr);
   };
 
-  const editRule = (data: any) => {
-    configRef.current.showDrawer(data);
+  const editRule = (data: any, typestr: string) => {
+    configRef.current.showDrawer(data, typestr);
+  };
+
+  const checkRule = (data: any, typestr: string) => {
+    configRef.current.showDrawer(data, typestr);
   };
 
   const deleteRule = (data: any) => {
@@ -68,7 +72,7 @@ const ScheduleList: React.FC<ListProps> = ({ datas }) => {
         }}
         header={
           <div>
-            <Button size="large" onClick={openDrawer}>
+            <Button size="large" onClick={() => openDrawer({}, 'add')} disabled>
               新增任务
             </Button>
           </div>
@@ -90,18 +94,21 @@ const ScheduleList: React.FC<ListProps> = ({ datas }) => {
                     type="default"
                     shape="circle"
                     icon={<DeleteOutlined key="delete" />}
+                    disabled
                   />
                 </Popconfirm>,
                 <Button
                   type="default"
                   shape="circle"
-                  onClick={() => editRule(item)}
+                  onClick={() => editRule(item, 'edit')}
                   icon={<EditOutlined key="edit" />}
+                  disabled
                 />,
                 <Button
                   type="default"
                   shape="circle"
-                  icon={<EllipsisOutlined key="ellipsis" />}
+                  onClick={() => checkRule(item, 'check')}
+                  icon={<FolderViewOutlined key="check" />}
                 />,
               ]}
             >

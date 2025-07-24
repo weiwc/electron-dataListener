@@ -1,5 +1,3 @@
-import { DateTime } from 'luxon';
-
 class JobSchedule {
   public title: string;
 
@@ -19,7 +17,7 @@ class JobSchedule {
 
   public port: string;
 
-  private _jobId: string | undefined;
+  public jobId: string;
 
   public restfulPath: string;
 
@@ -31,17 +29,20 @@ class JobSchedule {
   // 列表展示的更新时间
   public sortDate: string;
 
+  public executefrequency: number;
+
   // csv等文件的更新时间
-  public fileUpdateDate: string;
+  public fileUpdateDate: string | null;
 
   // csv中读取的最新时间
-  public fileReadNewestTime: string;
+  public fileReadNewestTime: string | null;
 
   public orgName: string;
 
   public fileUpdateSize: number;
 
   constructor(
+    jobId: string,
     title: string,
     rule: string,
     remark: string,
@@ -55,8 +56,10 @@ class JobSchedule {
     fileReadNewestTime: string,
     orgName: string,
     restfulPath: string,
-    fileUpdateSize: number
+    fileUpdateSize: number,
+    executefrequency: number
   ) {
+    this.jobId = jobId;
     this.title = title;
     this.rule = rule;
     this.remark = remark;
@@ -71,14 +74,7 @@ class JobSchedule {
     this.orgName = orgName;
     this.restfulPath = restfulPath;
     this.fileUpdateSize = fileUpdateSize;
-  }
-
-  get jobId(): string {
-    return this.jobId as string;
-  }
-
-  set jobId(val: string) {
-    this.jobId = val;
+    this.executefrequency = executefrequency;
   }
 
   get isInSchedule(): boolean {

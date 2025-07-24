@@ -22,19 +22,32 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
 
   const [callbackVal, setCallbackVal] = useState('1');
 
+  const [title, setTitle] = useState('新建任务');
+
+  const [formDisabled, setFormDisabled] = useState(false);
+
   const formMapRef = useRef<
     React.MutableRefObject<ProFormInstance<any> | undefined>[]
   >([]);
 
-  const showDrawer = (data: any) => {
+  const showDrawer = (data: any, typestr: string) => {
     __electronLog.info(`showDrawer data --->${data}`);
     if (data && JSON.stringify(data) !== '{}') {
-      setIsEdit(true);
+      if (typestr === 'edit') {
+        setTitle('编辑任务');
+        setFormDisabled(false);
+      } else {
+        setTitle('查看任务');
+        setFormDisabled(true);
+      }
+      setIsEdit(false);
       setFormData(data);
       formMapRef?.current?.forEach((formInstanceRef) => {
         formInstanceRef?.current?.setFieldsValue(data);
       });
     } else {
+      setTitle('创建任务');
+      setFormDisabled(false);
       setIsEdit(false);
       formMapRef?.current?.forEach((formInstanceRef) => {
         formInstanceRef?.current?.resetFields();
@@ -44,8 +57,8 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
   };
 
   useImperativeHandle(ref, () => ({
-    showDrawer: (data: any) => {
-      showDrawer(data);
+    showDrawer: (data: any, typestr: string) => {
+      showDrawer(data, typestr);
     },
   }));
 
@@ -73,23 +86,25 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
 
   const handleOk = async (values: any) => {
     __electronLog.info(`showDrawer handleOk --->${values}`);
-    message.success('Processing complete!');
-    const jobSchedule: JobSchedule = formData;
-    jobSchedule.title = values.title;
-    jobSchedule.rule = values.rule;
-    jobSchedule.remark = values.remark;
-    jobSchedule.sourceType = values.sourceType;
-    jobSchedule.filePath = values.filePath;
-    jobSchedule.callbackType = values.callbackType;
-    jobSchedule.ip = values.ip;
-    jobSchedule.port = values.port;
-    // 通过lowdb 将 form数据入库
-    if (isEdit) {
-      __electronLog.info('showDrawer action --->update');
-      window.electron.ipcRenderer.sendMessage('lowdb-update', [jobSchedule]);
-    } else {
-      __electronLog.info('showDrawer action --->insert');
-      window.electron.ipcRenderer.sendMessage('lowdb-insert', [jobSchedule]);
+    if (!formDisabled) {
+      message.success('Processing complete!');
+      const jobSchedule: JobSchedule = formData;
+      jobSchedule.title = values.title;
+      jobSchedule.rule = values.rule;
+      jobSchedule.remark = values.remark;
+      jobSchedule.sourceType = values.sourceType;
+      jobSchedule.filePath = values.filePath;
+      jobSchedule.callbackType = values.callbackType;
+      jobSchedule.ip = values.ip;
+      jobSchedule.port = values.port;
+      // 通过lowdb 将 form数据入库
+      if (isEdit) {
+        __electronLog.info('showDrawer action --->update');
+        window.electron.ipcRenderer.sendMessage('lowdb-update', [jobSchedule]);
+      } else {
+        __electronLog.info('showDrawer action --->insert');
+        window.electron.ipcRenderer.sendMessage('lowdb-insert', [jobSchedule]);
+      }
     }
     onClose();
     return true;
@@ -103,7 +118,8 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
 
   return (
     <Drawer
-      title={isEdit ? '编辑任务' : '创建任务'}
+      // title={isEdit ? '编辑任务' : '创建任务'}
+      title={title}
       width={720}
       maskClosable
       onClose={onClose}
@@ -113,7 +129,9 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
       extra={
         <Space>
           <Button onClick={onClose}>取消</Button>
-          <Button onClick={onReset}>重置</Button>
+          <Button onClick={onReset} disabled={formDisabled}>
+            重置
+          </Button>
         </Space>
       }
     >
@@ -132,10 +150,11 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
           name: string;
         }>
           name="base"
-          title="创建任务"
+          title={title}
           stepProps={{
             description: '这里填入的都是基本信息',
           }}
+          readonly={formDisabled}
         >
           <ProFormText
             name="title"
@@ -159,6 +178,7 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
           stepProps={{
             description: '这里填入运维参数',
           }}
+          readonly={formDisabled}
         >
           <ProFormSelect
             label="数据源类型"
@@ -184,7 +204,11 @@ const ScheduleDrawer = (props: any, ref: Ref<unknown> | undefined) => {
             <Input disabled addonAfter={genFile} />
           </ProFormText>
         </StepsForm.StepForm>
-        <StepsForm.StepForm name="callbackConfig" title="回调配置">
+        <StepsForm.StepForm
+          name="callbackConfig"
+          title="回调配置"
+          readonly={formDisabled}
+        >
           <ProFormSelect
             label="回调方式"
             name="callbackType"

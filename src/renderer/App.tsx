@@ -10,8 +10,6 @@ const AppContext: React.FC = () => {
   const { state, dispatch } = useContext(Context)!;
   // let listData: JobSchedule[] = [];
 
-  window.electron.ipcRenderer.sendMessage('lowdb-query', []);
-
   useEffect(() => {
     window.electron.ipcRenderer.once('query-reply', async (datas: any) => {
       __electronLog.info(`jobs query --->${datas}`);
